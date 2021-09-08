@@ -21,7 +21,7 @@ pub fn get_fn<'gcc, 'tcx>(cx: &CodegenCx<'gcc, 'tcx>, instance: Instance<'tcx>) 
     assert!(!instance.substs.has_escaping_bound_vars());
     assert!(!instance.substs.has_param_types_or_consts());
 
-    if let Some(&func) = cx.instances.borrow().get(&instance) {
+    if let Some(&func) = cx.function_instances.borrow().get(&instance) {
         return func;
     }
 
@@ -73,7 +73,7 @@ pub fn get_fn<'gcc, 'tcx>(cx: &CodegenCx<'gcc, 'tcx>, instance: Instance<'tcx>) 
             func
         };
 
-    cx.instances.borrow_mut().insert(instance, func);
+    cx.function_instances.borrow_mut().insert(instance, func);
 
     func
 }
