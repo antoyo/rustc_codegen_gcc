@@ -407,6 +407,7 @@ impl<'a, 'gcc, 'tcx> Builder<'a, 'gcc, 'tcx> {
             );
             self.llbb().add_eval(
                 self.location,
+                #[must_use]
                 self.context.new_call(
                     self.location,
                     func,

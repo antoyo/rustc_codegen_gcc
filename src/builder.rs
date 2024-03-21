@@ -154,6 +154,7 @@ impl<'a, 'gcc, 'tcx> Builder<'a, 'gcc, 'tcx> {
         // NOTE: not sure why, but we have the wrong type here.
         let int_type = compare_exchange.get_param(2).to_rvalue().get_type();
         let src = self.context.new_cast(self.location, src, int_type);
+        #[must_use]
         self.context.new_call(
             self.location,
             compare_exchange,
@@ -319,12 +320,15 @@ impl<'a, 'gcc, 'tcx> Builder<'a, 'gcc, 'tcx> {
             self.block.add_assignment(
                 self.location,
                 result,
+                #[must_use]
                 self.cx.context.new_call(self.location, func, &args),
             );
             result.to_rvalue()
         } else {
             self.block
-                .add_eval(self.location, self.cx.context.new_call(self.location, func, &args));
+                .add_eval(self.location, 
+                    #[must_use]
+                    self.cx.context.new_call(self.location, func, &args));
             // Return dummy value when not having return value.
             self.context.new_rvalue_from_long(self.isize_type, 0)
         }
@@ -441,6 +445,7 @@ impl<'a, 'gcc, 'tcx> Builder<'a, 'gcc, 'tcx> {
         self.block.add_assignment(
             self.location,
             result,
+            #[must_use]
             self.cx.context.new_call(self.location, func, args),
         );
         result.to_rvalue()
@@ -641,7 +646,9 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
 
     fn unreachable(&mut self) {
         let func = self.context.get_builtin_function("__builtin_unreachable");
-        self.block.add_eval(self.location, self.context.new_call(self.location, func, &[]));
+        self.block.add_eval(self.location, 
+            #[must_use]
+            self.context.new_call(self.location, func, &[]));
         let return_type = self.block.get_function().get_return_type();
         let void_type = self.context.new_type::<()>();
         if return_type == void_type {
@@ -1132,6 +1139,7 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         let value = self.context.new_cast(self.location, value, int_type);
         self.llbb().add_eval(
             self.location,
+            #[must_use]
             self.context.new_call(self.location, atomic_store, &[ptr, value, ordering]),
         );
     }
@@ -1298,6 +1306,7 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         // TODO(antoyo): handle aligns and is_volatile.
         self.block.add_eval(
             self.location,
+            #[must_use]
             self.context.new_call(self.location, memcpy, &[dst, src, size]),
         );
     }
@@ -1327,6 +1336,7 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         // TODO(antoyo): handle is_volatile.
         self.block.add_eval(
             self.location,
+            #[must_use]
             self.context.new_call(self.location, memmove, &[dst, src, size]),
         );
     }
@@ -1347,6 +1357,7 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         let size = self.intcast(size, self.type_size_t(), false);
         self.block.add_eval(
             self.location,
+            #[must_use]
             self.context.new_call(self.location, memset, &[ptr, fill_byte, size]),
         );
     }
@@ -1536,7 +1547,9 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         let exn = self.context.new_cast(self.location, exn0, exn_type);
         let unwind_resume = self.context.get_target_builtin_function("__builtin_unwind_resume");
         self.llbb()
-            .add_eval(self.location, self.context.new_call(self.location, unwind_resume, &[exn]));
+            .add_eval(self.location, 
+                #[must_use]
+                self.context.new_call(self.location, unwind_resume, &[exn]));
         self.unreachable();
     }
 
@@ -1642,7 +1655,9 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         let thread_fence = self.context.get_builtin_function(name);
         let order = self.context.new_rvalue_from_int(self.i32_type, order.to_gcc());
         self.llbb()
-            .add_eval(self.location, self.context.new_call(self.location, thread_fence, &[order]));
+            .add_eval(self.location, 
+                #[must_use]
+                self.context.new_call(self.location, thread_fence, &[order]));
     }
 
     fn set_invariant_load(&mut self, load: RValue<'gcc>) {
