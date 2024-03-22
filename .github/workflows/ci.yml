@@ -94,6 +94,11 @@ jobs:
     - name: Run tests
       run: |
         ./y.sh test --release --clean --build-sysroot ${{ matrix.commands }}
+      
+    - name: Run y.sh cargo build
+      run: |
+        chmod +x ./y.sh
+        ./y.sh cargo build    
 
     - name: Check formatting
       run: cargo fmt -- --check
