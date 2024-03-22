@@ -97,7 +97,8 @@ jobs:
       
     - name: Run y.sh cargo build
       run: |
-        ./y.sh cargo build --manifest-path tests/hello-world/Cargo.toml   
+        export RUSTFLAGS="-Zcodegen-backend=$(pwd)/target/release/librustc_codegen_gcc.so"
+        ./y.sh cargo build --manifest-path tests/hello_world/Cargo.toml
 
     - name: Check formatting
       run: cargo fmt -- --check
