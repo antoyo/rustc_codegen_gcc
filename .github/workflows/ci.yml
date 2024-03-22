@@ -97,7 +97,7 @@ jobs:
       
     - name: Run y.sh cargo build
       run: |
-        ./y.sh cargo build    
+        ./y.sh cargo build --manifest-path tests/hello-world/Cargo.toml   
 
     - name: Check formatting
       run: cargo fmt -- --check
