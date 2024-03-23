@@ -935,7 +935,11 @@ fn should_remove_test(file_path: &Path) -> Result<bool, String> {
     Ok(false)
 }
 
-fn test_rustc_inner<F>(env: &Env, args: &TestArg, prepare_files_callback: F) -> Result<(), String>
+fn test_rustc_inner_ui<F>(
+    env: &Env,
+    args: &TestArg,
+    prepare_files_callback: F,
+) -> Result<(), String>
 where
     F: Fn(&Path) -> Result<bool, String>,
 {
@@ -1059,7 +1063,7 @@ where
     }
 
     // FIXME: create a function "display_if_not_quiet" or something along the line.
-    println!("[TEST] rustc test suite");
+    println!("[TEST] rustc ui test suite");
     env.insert("COMPILETEST_FORCE_STAGE0".to_string(), "1".to_string());
 
     let extra = if args.is_using_gcc_master_branch() {
@@ -1077,6 +1081,7 @@ where
     );
 
     env.get_mut("RUSTFLAGS").unwrap().clear();
+
     run_command_with_output_and_env(
         &[
             &"./x.py",
@@ -1095,12 +1100,137 @@ where
     Ok(())
 }
 
+fn test_rustc_inner_run_make<F>(
+    env: &Env,
+    args: &TestArg,
+    prepare_files_callback: F,
+) -> Result<(), String>
+where
+    F: Fn(&Path) -> Result<bool, String>,
+{
+    // FIXME: create a function "display_if_not_quiet" or something along the line.
+    println!("[TEST] rust-lang/rust");
+    let mut env = env.clone();
+    let rust_path = setup_rustc(&mut env, args)?;
+
+    if !prepare_files_callback(&rust_path)? {
+        // FIXME: create a function "display_if_not_quiet" or something along the line.
+        println!("Keeping all run-make tests");
+    }
+
+    let nb_parts = args.nb_parts.unwrap_or(0);
+    if nb_parts > 0 {
+        let current_part = args.current_part.unwrap();
+        println!(
+            "Splitting run_make_test into {} parts (and running part {})",
+            nb_parts, current_part
+        );
+        let out = String::from_utf8(
+            run_command(
+                &[
+                    &"find",
+                    &"tests/run-make",
+                    &"-mindepth",
+                    &"1",
+                    &"-maxdepth",
+                    &"1",
+                    &"-type",
+                    &"d",
+                ],
+                Some(&rust_path),
+            )?
+            .stdout,
+        )
+        .map_err(|error| format!("Failed to retrieve output of find command: {:?}", error))?;
+        let mut directories = out
+            .split('\n')
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>();
+        directories.sort();
+        let count = directories.len() / nb_parts + 1;
+        let start = current_part * count;
+        for path in directories.iter().skip(start).take(count) {
+            let dir = rust_path.join(path);
+            std::fs::remove_dir_all(&dir).map_err(|error| {
+                format!("Failed to remove folder `{}`: {:?}", dir.display(), error)
+            })?;
+        }
+    }
+
+    // FIXME: create a function "display_if_not_quiet" or something along the line.
+    println!("[TEST] rustc run-make test suite");
+    env.insert("COMPILETEST_FORCE_STAGE0".to_string(), "1".to_string());
+
+    let extra =
+        if args.is_using_gcc_master_branch() { "" } else { " -Csymbol-mangling-version=v0" };
+
+    let rustc_args = format!(
+        "{} -Zcodegen-backend={} --sysroot {}{}",
+        env.get("TEST_FLAGS").unwrap_or(&String::new()),
+        args.config_info.cg_backend_path,
+        args.config_info.sysroot_path,
+        extra,
+    );
+
+    env.get_mut("RUSTFLAGS").unwrap().clear();
+
+    // Run the run-make tests
+    run_command_with_output_and_env(
+        &[
+            &"./x.py",
+            &"test",
+            &"--run",
+            &"always",
+            &"--stage",
+            &"0",
+            &"tests/run-make",
+            &"--rustc-args",
+            &rustc_args,
+        ],
+        Some(&rust_path),
+        Some(&env),
+    )?;
+    Ok(())
+}
+
 fn test_rustc(env: &Env, args: &TestArg) -> Result<(), String> {
-    test_rustc_inner(env, args, |_| Ok(false))
+    test_rustc_inner_run_make(env, args, |_| Ok(false))?;
+    test_rustc_inner_ui(env, args, |_| Ok(false))
 }
 
 fn test_failing_rustc(env: &Env, args: &TestArg) -> Result<(), String> {
-    test_rustc_inner(env, args, |rust_path| {
+    test_rustc_inner_run_make(env, args, |rust_path| {
+        // Removing all tests.
+        run_command(
+            &[
+                &"find",
+                &"tests/run-make",
+                &"-mindepth",
+                &"1",
+                &"-type",
+                &"d",
+                &"-exec",
+                &"rm",
+                &"-rf",
+                &"{}",
+                &"+",
+            ],
+            Some(rust_path),
+        )?;
+        // Putting back only the failing ones.
+        let path = "tests/failing-run-make-tests.txt";
+        if let Ok(files) = std::fs::read_to_string(path) {
+            for file in files.split('\n').map(|line| line.trim()).filter(|line| !line.is_empty()) {
+                run_command(&[&"git", &"checkout", &"--", &file], Some(&rust_path))?;
+            }
+        } else {
+            println!("Failed to read `{}`, not putting back failing run-make tests", path);
+        }
+        Ok(true)
+    })?;
+
+    test_rustc_inner_ui(env, args, |rust_path| {
         // Removing all tests.
         run_command(
             &[
@@ -1120,11 +1250,7 @@ fn test_failing_rustc(env: &Env, args: &TestArg) -> Result<(), String> {
         // Putting back only the failing ones.
         let path = "tests/failing-ui-tests.txt";
         if let Ok(files) = std::fs::read_to_string(path) {
-            for file in files
-                .split('\n')
-                .map(|line| line.trim())
-                .filter(|line| !line.is_empty())
-            {
+            for file in files.split('\n').map(|line| line.trim()).filter(|line| !line.is_empty()) {
                 run_command(&[&"git", &"checkout", &"--", &file], Some(&rust_path))?;
             }
         } else {
@@ -1138,15 +1264,27 @@ fn test_failing_rustc(env: &Env, args: &TestArg) -> Result<(), String> {
 }
 
 fn test_successful_rustc(env: &Env, args: &TestArg) -> Result<(), String> {
-    test_rustc_inner(env, args, |rust_path| {
+    test_rustc_inner_run_make(env, args, |rust_path| {
+        // Removing the failing tests.
+        let path = "tests/failing-run-make-tests.txt";
+        if let Ok(files) = std::fs::read_to_string(path) {
+            for file in files.split('\n').map(|line| line.trim()).filter(|line| !line.is_empty()) {
+                let path = rust_path.join(file);
+                if let Err(e) = std::fs::remove_dir_all(&path) {
+                    println!("Failed to remove directory `{}`: {}", path.display(), e);
+                }
+            }
+        } else {
+            println!("Failed to read `{}`, not putting back failing run-make tests", path);
+        }
+        Ok(true)
+    })?;
+
+    test_rustc_inner_ui(env, args, |rust_path| {
         // Removing the failing tests.
         let path = "tests/failing-ui-tests.txt";
         if let Ok(files) = std::fs::read_to_string(path) {
-            for file in files
-                .split('\n')
-                .map(|line| line.trim())
-                .filter(|line| !line.is_empty())
-            {
+            for file in files.split('\n').map(|line| line.trim()).filter(|line| !line.is_empty()) {
                 let path = rust_path.join(file);
                 remove_file(&path)?;
             }
