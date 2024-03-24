@@ -9,7 +9,7 @@ use std::path::Path;
 struct BuildArg {
     flags: Vec<String>,
     config_info: ConfigInfo,
-    sys_root: bool,
+    sysroot: bool,
 }
 
 impl BuildArg {
@@ -31,7 +31,7 @@ impl BuildArg {
                     }
                 }
                 "--sysroot" => {
-                    arg.sys_root = true;
+                    arg.sysroot = true;
                 }
                 "--help" => {
                     Self::usage();
@@ -224,7 +224,7 @@ fn build_codegen(args: &mut BuildArg) -> Result<(), String> {
     })?;
 
     println!("[BUILD] sysroot");
-    if(args.sys_root){
+    if(args.sysroot){
          build_sysroot(&env, &args.config_info)?;
          Ok(())
     }
