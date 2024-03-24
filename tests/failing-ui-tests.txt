@@ -77,3 +77,4 @@ tests/ui/consts/issue-73976-monomorphic.rs
 tests/ui/consts/issue-94675.rs
 tests/ui/rfcs/rfc-2632-const-trait-impl/const-drop-fail.rs
 tests/ui/rfcs/rfc-2632-const-trait-impl/const-drop.rs
+
