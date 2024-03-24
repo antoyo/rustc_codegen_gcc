@@ -138,6 +138,16 @@ impl TestArg {
                         return Err("Expected an argument after `--features`, found nothing".into())
                     }
                 },
+                "--sysroot" => match args.next() {
+                    Some(feature) if !feature.is_empty() => {
+                        test_arg
+                            .flags
+                            .extend_from_slice(&["--sysroot".into(), feature]);
+                    }
+                    _ => {
+                        return Err("Expected an argument after `--sysroot`, found nothing".into())
+                    }
+                },
                 "--use-system-gcc" => {
                     println!("Using system GCC");
                     test_arg.use_system_gcc = true;
