@@ -840,7 +840,6 @@ fn should_remove_test(file_path: &Path) -> Result<bool, String> {
             "-Cllvm-args",
             "//~",
             "thread",
-            "//@ known-bug"
         ]
             .iter()
             .any(|check| line.contains(check))
@@ -928,6 +927,7 @@ where
         let nb_parts = args.nb_parts.unwrap_or(0);
         if nb_parts > 0 {
             let current_part = args.current_part.unwrap();
+            // FIXME: create a function "display_if_not_quiet" or something along the line.
             println!(
                 "Splitting ui_test into {} parts (and running part {})",
                 nb_parts, current_part
@@ -1047,7 +1047,7 @@ fn prepare_files_callback_failing<'a>(
     move |rust_path| {
         let files = std::fs::read_to_string(file_path).unwrap_or_default();
         let first_file_name = files.lines().next().unwrap_or("");
-        // If the first line ends with a `/`, we treat it as a directory.
+        // If the first line ends with a `/`, we treat all lines in the file as a directory.
         if first_file_name.ends_with('/') {
             // Treat as directory
             // Removing all tests.
@@ -1110,7 +1110,7 @@ fn prepare_files_callback_success<'a>(
     move |rust_path| {
         let files = std::fs::read_to_string(file_path).unwrap_or_default();
         let first_file_name = files.lines().next().unwrap_or("");
-        // If the first line ends with a `/`, we treat it as a directory.
+        // If the first line ends with a `/`, we treat all lines in the file as a directory.
         if first_file_name.ends_with('/') {
             if let Ok(files) = std::fs::read_to_string(file_path) {
                 for file in
