@@ -223,6 +223,7 @@ fn build_codegen(args: &mut BuildArg) -> Result<(), String> {
             gccjit_target, error
         )
     })?;
+    create_dir(gccjit_target)?;
     println!("[BUILD] sysroot");
     if args.sysroot {
          build_sysroot(&env, &args.config_info)?;
