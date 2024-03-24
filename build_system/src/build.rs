@@ -31,11 +31,10 @@ impl BuildArg {
                 }
                 "--sysroot" => {
                     if let Some(arg) = args.next() {
-                        build_arg.flags.push("--sysroot".to_string());
-                        build_arg.flags.push(arg.as_str().into());
+                        build_sysroot(&env, &args.config_info)?
                     } else {
                         return Err(
-                           "Expected a value after `--sysroot`, found nothing".to_string() 
+                            "Expected a value after `--sysroot`, found nothing".to_string()
                         );
                     }
                 }
