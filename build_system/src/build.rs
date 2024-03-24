@@ -31,7 +31,7 @@ impl BuildArg {
                     }
                 }
                 "--sysroot" => {
-                    args.sysroot = true;
+                    build_arg.sysroot = true;
                     return Ok(None);
                 }
                 "--help" => {
@@ -225,7 +225,7 @@ fn build_codegen(args: &mut BuildArg) -> Result<(), String> {
     })?;
 
     println!("[BUILD] sysroot");
-    if(args.sysroot){
+    if args.sysroot {
          build_sysroot(&env, &args.config_info)?;
     }
     Ok(())
