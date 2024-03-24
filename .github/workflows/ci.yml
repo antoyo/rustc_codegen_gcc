@@ -78,7 +78,7 @@ jobs:
     - name: Build
       run: |
         ./y.sh prepare --only-libcore
-        ./y.sh build
+        ./y.sh build --sysroot
         cargo test
         ./y.sh clean all
 
