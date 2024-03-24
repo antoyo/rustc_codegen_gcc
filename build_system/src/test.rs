@@ -840,6 +840,7 @@ fn should_remove_test(file_path: &Path) -> Result<bool, String> {
             "-Cllvm-args",
             "//~",
             "thread",
+            "//@ known-bug"
         ]
             .iter()
             .any(|check| line.contains(check))
@@ -865,11 +866,13 @@ fn test_rustc_inner<F>(
 where
     F: Fn(&Path) -> Result<bool, String>,
 {
+    // FIXME: create a function "display_if_not_quiet" or something along the line.
     println!("[TEST] rust-lang/rust");
     let mut env = env.clone();
     let rust_path = setup_rustc(&mut env, args)?;
 
     if !prepare_files_callback(&rust_path)? {
+        // FIXME: create a function "display_if_not_quiet" or something along the line.
         println!("Keeping all {} tests", test_type);
     }
 
@@ -899,6 +902,8 @@ where
             |_| Ok(()),
         )?;
 
+        // These two functions are used to remove files that are known to not be working currently
+        // with the GCC backend to reduce noise.
         fn dir_handling(dir: &Path) -> Result<(), String> {
             if dir.file_name().map(|name| name == "auxiliary").unwrap_or(true) {
                 return Ok(());
@@ -917,16 +922,6 @@ where
             }
             Ok(())
         }
-
-        remove_file(&rust_path.join("tests/ui/consts/const_cmp_type_id.rs"))?;
-        remove_file(&rust_path.join("tests/ui/consts/issue-73976-monomorphic.rs"))?;
-        // this test is oom-killed in the CI.
-        remove_file(&rust_path.join("tests/ui/consts/issue-miri-1910.rs"))?;
-        // Tests generating errors.
-        remove_file(&rust_path.join("tests/ui/consts/issue-94675.rs"))?;
-        remove_file(&rust_path.join("tests/ui/mir/mir_heavy_promoted.rs"))?;
-        remove_file(&rust_path.join("tests/ui/rfcs/rfc-2632-const-trait-impl/const-drop-fail.rs"))?;
-        remove_file(&rust_path.join("tests/ui/rfcs/rfc-2632-const-trait-impl/const-drop.rs"))?;
 
         walk_dir(rust_path.join("tests/ui"), dir_handling, file_handling)?;
 
@@ -960,7 +955,10 @@ where
                 .map(|line| line.trim())
                 .filter(|line| !line.is_empty())
                 .collect::<Vec<_>>();
+            // To ensure it'll be always the same sub files, we sort the content.
             files.sort();
+            // We increment the number of tests by one because if this is an odd number, we would skip
+            // one test.
             let count = files.len() / nb_parts + 1;
             let start = current_part * count;
             for path in files.iter().skip(start).take(count) {
@@ -969,6 +967,7 @@ where
         }
     }
 
+    // FIXME: create a function "display_if_not_quiet" or something along the line.
     println!("[TEST] rustc {} test suite", test_type);
     env.insert("COMPILETEST_FORCE_STAGE0".to_string(), "1".to_string());
 
@@ -976,11 +975,11 @@ where
         if args.is_using_gcc_master_branch() { "" } else { " -Csymbol-mangling-version=v0" };
 
     let rustc_args = format!(
-        "{} -Zcodegen-backend={} --sysroot {}{}",
-        env.get("TEST_FLAGS").unwrap_or(&String::new()),
-        args.config_info.cg_backend_path,
-        args.config_info.sysroot_path,
-        extra,
+        "{test_flags} -Zcodegen-backend={backend} --sysroot {sysroot}{extra}",
+        test_flags = env.get("TEST_FLAGS").unwrap_or(&String::new()),
+        backend = args.config_info.cg_backend_path,
+        sysroot = args.config_info.sysroot_path,
+        extra = extra,
     );
 
     env.get_mut("RUSTFLAGS").unwrap().clear();
@@ -1009,18 +1008,21 @@ fn test_rustc(env: &Env, args: &TestArg) -> Result<(), String> {
 }
 
 fn test_failing_rustc(env: &Env, args: &TestArg) -> Result<(), String> {
-    test_rustc_inner(
+    let result1 = test_rustc_inner(
         env,
         args,
         prepare_files_callback_failing("tests/failing-run-make-tests.txt", "run-make"),
         "run-make",
-    )?;
-    test_rustc_inner(
+    );
+
+    let result2 = test_rustc_inner(
         env,
         args,
         prepare_files_callback_failing("tests/failing-ui-tests.txt", "ui"),
         "ui",
-    )
+    );
+
+    result1.and(result2)
 }
 
 fn test_successful_rustc(env: &Env, args: &TestArg) -> Result<(), String> {
@@ -1045,6 +1047,7 @@ fn prepare_files_callback_failing<'a>(
     move |rust_path| {
         let files = std::fs::read_to_string(file_path).unwrap_or_default();
         let first_file_name = files.lines().next().unwrap_or("");
+        // If the first line ends with a `/`, we treat it as a directory.
         if first_file_name.ends_with('/') {
             // Treat as directory
             // Removing all tests.
@@ -1064,20 +1067,6 @@ fn prepare_files_callback_failing<'a>(
                 ],
                 Some(rust_path),
             )?;
-            // Putting back only the failing ones.
-
-            if let Ok(files) = std::fs::read_to_string(&file_path) {
-                for file in
-                    files.split('\n').map(|line| line.trim()).filter(|line| !line.is_empty())
-                {
-                    run_command(&[&"git", &"checkout", &"--", &file], Some(&rust_path))?;
-                }
-            } else {
-                println!(
-                    "Failed to read `{}`, not putting back failing {} tests",
-                    file_path, test_type
-                );
-            }
         } else {
             // Treat as file
             // Removing all tests.
@@ -1096,20 +1085,20 @@ fn prepare_files_callback_failing<'a>(
                 ],
                 Some(rust_path),
             )?;
-            // Putting back only the failing ones.
-            if let Ok(files) = std::fs::read_to_string(&file_path) {
-                for file in
-                    files.split('\n').map(|line| line.trim()).filter(|line| !line.is_empty())
-                {
-                    run_command(&[&"git", &"checkout", &"--", &file], Some(&rust_path))?;
-                }
-            } else {
-                println!(
-                    "Failed to read `{}`, not putting back failing `{}` tests",
-                    file_path, test_type
-                );
-            }
         }
+
+        // Putting back only the failing ones.
+        if let Ok(files) = std::fs::read_to_string(&file_path) {
+            for file in files.split('\n').map(|line| line.trim()).filter(|line| !line.is_empty()) {
+                run_command(&[&"git", &"checkout", &"--", &file], Some(&rust_path))?;
+            }
+        } else {
+            println!(
+                "Failed to read `{}`, not putting back failing {} tests",
+                file_path, test_type
+            );
+        }
+
         Ok(true)
     }
 }
@@ -1121,6 +1110,7 @@ fn prepare_files_callback_success<'a>(
     move |rust_path| {
         let files = std::fs::read_to_string(file_path).unwrap_or_default();
         let first_file_name = files.lines().next().unwrap_or("");
+        // If the first line ends with a `/`, we treat it as a directory.
         if first_file_name.ends_with('/') {
             if let Ok(files) = std::fs::read_to_string(file_path) {
                 for file in

@@ -70,3 +70,6 @@ tests/ui/consts/try-operator.rs
 tests/ui/coroutine/unwind-abort-mix.rs
 tests/ui/type-alias-impl-trait/rpit_tait_equality_in_canonical_query.rs
 tests/ui/impl-trait/equality-in-canonical-query.rs
+tests/ui/consts/issue-miri-1910.rs
+tests/ui/mir/mir_heavy_promoted.rs
+
