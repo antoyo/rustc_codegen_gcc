@@ -960,6 +960,7 @@ where
             // We increment the number of tests by one because if this is an odd number, we would skip
             // one test.
             let count = files.len() / nb_parts + 1;
+            // We remove the files we don't want to test.
             let start = current_part * count;
             for path in files.iter().skip(start).take(count) {
                 remove_file(&rust_path.join(path))?;
@@ -1112,6 +1113,7 @@ fn prepare_files_callback_success<'a>(
         let first_file_name = files.lines().next().unwrap_or("");
         // If the first line ends with a `/`, we treat all lines in the file as a directory.
         if first_file_name.ends_with('/') {
+            // Removing the failing tests.
             if let Ok(files) = std::fs::read_to_string(file_path) {
                 for file in
                     files.split('\n').map(|line| line.trim()).filter(|line| !line.is_empty())
@@ -1128,6 +1130,7 @@ fn prepare_files_callback_success<'a>(
                 );
             }
         } else {
+            // Removing the failing tests.
             if let Ok(files) = std::fs::read_to_string(file_path) {
                 for file in
                     files.split('\n').map(|line| line.trim()).filter(|line| !line.is_empty())
