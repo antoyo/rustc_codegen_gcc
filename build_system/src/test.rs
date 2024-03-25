@@ -892,7 +892,7 @@ where
         println!("Keeping all {} tests", test_type);
     }
 
-    if test_type == "ui" {
+    if test_type == "tests/ui" {
         if run_error_pattern_test {
             // After we removed the error tests that are known to panic with rustc_codegen_gcc, we now remove the passing tests since this runs the error tests.
             walk_dir(
@@ -1003,7 +1003,7 @@ where
     }
 
     // FIXME: create a function "display_if_not_quiet" or something along the line.
-    println!("[TEST] rustc {} test suite", test_type);
+    println!("[TEST] rustc {} suite", test_type);
     env.insert("COMPILETEST_FORCE_STAGE0".to_string(), "1".to_string());
 
     let extra =
@@ -1027,7 +1027,7 @@ where
             &"always",
             &"--stage",
             &"0",
-            &format!("tests/{}", test_type),
+            &test_type,
             &"--rustc-args",
             &rustc_args,
         ],
@@ -1039,7 +1039,7 @@ where
 
 fn test_rustc(env: &Env, args: &TestArg) -> Result<(), String> {
     //test_rustc_inner(env, args, |_| Ok(false), false, "run-make")?;
-    test_rustc_inner(env, args, |_| Ok(false), false, "ui")
+    test_rustc_inner(env, args, |_| Ok(false), false, "tests/ui")
 }
 
 fn test_failing_rustc(env: &Env, args: &TestArg) -> Result<(), String> {
@@ -1055,21 +1055,22 @@ fn test_failing_rustc(env: &Env, args: &TestArg) -> Result<(), String> {
     let result2 = test_rustc_inner(
         env,
         args,
-        retain_files_callback("tests/failing-ui-tests.txt", "ui"),
+        retain_files_callback("tests/failing-ui-tests.txt", "tests/ui"),
         false,
-        "ui",
+        "tests/ui",
     );
-
     result1.and(result2)
 }
 
 fn test_successful_rustc(env: &Env, args: &TestArg) -> Result<(), String> {
+    // All std tests are successful thus no need to prepare file callback
+    test_rustc_inner(env, args, |_| Ok(false), false, "library/std")?;
     test_rustc_inner(
         env,
         args,
-        remove_files_callback("tests/failing-ui-tests.txt", "ui"),
+        remove_files_callback("tests/failing-ui-tests.txt", "tests/ui"),
         false,
-        "ui",
+        "tests/ui",
     )?;
     Ok(())
     /*test_rustc_inner(
@@ -1085,9 +1086,9 @@ fn test_failing_ui_pattern_tests(env: &Env, args: &TestArg) -> Result<(), String
     test_rustc_inner(
         env,
         args,
-        remove_files_callback("tests/failing-ice-tests.txt", "ui"),
+        remove_files_callback("tests/failing-ice-tests.txt", "tests/ui"),
         true,
-        "ui",
+        "tests/ui",
     )
 }
 
@@ -1105,7 +1106,7 @@ fn retain_files_callback<'a>(
             run_command(
                 &[
                     &"find",
-                    &format!("tests/{}", test_type),
+                    &test_type,
                     &"-mindepth",
                     &"1",
                     &"-type",
@@ -1124,7 +1125,7 @@ fn retain_files_callback<'a>(
             run_command(
                 &[
                     &"find",
-                    &format!("tests/{}", test_type),
+                    &test_type,
                     &"-type",
                     &"f",
                     &"-name",
