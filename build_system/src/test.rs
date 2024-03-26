@@ -1160,39 +1160,31 @@ fn remove_files_callback<'a>(
     test_type: &'a str,
 ) -> impl Fn(&Path) -> Result<bool, String> + 'a {
     move |rust_path| {
-        let files = std::fs::read_to_string(file_path).unwrap_or_default();
-        let first_file_name = files.lines().next().unwrap_or("");
-        // If the first line ends with a `/`, we treat all lines in the file as a directory.
-        if first_file_name.ends_with('/') {
-            // Removing the failing tests.
-            if let Ok(files) = std::fs::read_to_string(file_path) {
-                for file in
-                    files.split('\n').map(|line| line.trim()).filter(|line| !line.is_empty())
-                {
-                    let path = rust_path.join(file);
+        // Attempt to read the file
+        if let Ok(files) = std::fs::read_to_string(file_path) {
+            // Iterate over each line in the file
+            for file in files.split('\n').map(|line| line.trim()).filter(|line| !line.is_empty()) {
+                let path = rust_path.join(file);
+
+                // If the line ends with a `/`, treat it as a directory
+                if file.ends_with('/') {
                     if let Err(e) = std::fs::remove_dir_all(&path) {
                         println!("Failed to remove directory `{}`: {}", path.display(), e);
                     }
+                } else {
+                    // Otherwise, treat it as a file
+                    if let Err(e) = std::fs::remove_file(&path) {
+                        println!("Failed to remove file `{}`: {}", path.display(), e);
+                    }
                 }
-            } else {
-                println!(
-                    "Failed to read `{}`, not putting back failing {} tests",
-                    file_path, test_type
-                );
             }
         } else {
-            // Removing the failing tests.
-            if let Ok(files) = std::fs::read_to_string(file_path) {
-                for file in
-                    files.split('\n').map(|line| line.trim()).filter(|line| !line.is_empty())
-                {
-                    let path = rust_path.join(file);
-                    remove_file(&path)?;
-                }
-            } else {
-                println!("Failed to read `{}`, not putting back failing ui tests", file_path);
-            }
+            println!(
+                "Failed to read `{}`, not putting back failing {} tests",
+                file_path, test_type
+            );
         }
+
         Ok(true)
     }
 }
