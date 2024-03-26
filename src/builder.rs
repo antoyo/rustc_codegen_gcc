@@ -68,7 +68,17 @@ impl<'a, 'gcc, 'tcx> Builder<'a, 'gcc, 'tcx> {
         src: RValue<'gcc>,
         order: AtomicOrdering,
     ) -> RValue<'gcc> {
+        #[cfg(feature = "master")]
         let size = src.get_type().get_size();
+        #[cfg(not(feature = "master"))]
+        let size = {
+            let type_ = src.get_type();
+            if type_.get_pointee().is_some() {
+                std::mem::size_of::<*const ()>() as u32
+            } else {
+                type_.get_size()
+            }
+        };
 
         let func = self.current_func();
 
@@ -138,7 +148,18 @@ impl<'a, 'gcc, 'tcx> Builder<'a, 'gcc, 'tcx> {
         failure_order: AtomicOrdering,
         weak: bool,
     ) -> RValue<'gcc> {
+        #[cfg(feature = "master")]
         let size = src.get_type().get_size();
+        #[cfg(not(feature = "master"))]
+        let size = {
+            let type_ = src.get_type();
+            if type_.get_pointee().is_some() {
+                std::mem::size_of::<*const ()>() as u32
+            } else {
+                type_.get_size()
+            }
+        };
+
         let compare_exchange =
             self.context.get_builtin_function(&format!("__atomic_compare_exchange_{}", size));
         let order = self.context.new_rvalue_from_int(self.i32_type, order.to_gcc());
@@ -153,7 +174,7 @@ impl<'a, 'gcc, 'tcx> Builder<'a, 'gcc, 'tcx> {
 
         // NOTE: not sure why, but we have the wrong type here.
         let int_type = compare_exchange.get_param(2).to_rvalue().get_type();
-        let src = self.context.new_cast(self.location, src, int_type);
+        let src = self.context.new_bitcast(self.location, src, int_type);
         self.context.new_call(
             self.location,
             compare_exchange,
@@ -1131,7 +1152,7 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         // the following cast is required to avoid this error:
         // gcc_jit_context_new_call: mismatching types for argument 2 of function "__atomic_store_4": assignment to param arg1 (type: int) from loadedValue3577 (type: unsigned int  __attribute__((aligned(4))))
         let int_type = atomic_store.get_param(1).to_rvalue().get_type();
-        let value = self.context.new_cast(self.location, value, int_type);
+        let value = self.context.new_bitcast(self.location, value, int_type);
         self.llbb().add_eval(
             self.location,
             self.context.new_call(self.location, atomic_store, &[ptr, value, ordering]),
@@ -1600,7 +1621,17 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         src: RValue<'gcc>,
         order: AtomicOrdering,
     ) -> RValue<'gcc> {
+        #[cfg(feature = "master")]
         let size = src.get_type().get_size();
+        #[cfg(not(feature = "master"))]
+        let size = {
+            let type_ = src.get_type();
+            if type_.get_pointee().is_some() {
+                std::mem::size_of::<*const ()>() as u32
+            } else {
+                type_.get_size()
+            }
+        };
         let name = match op {
             AtomicRmwBinOp::AtomicXchg => format!("__atomic_exchange_{}", size),
             AtomicRmwBinOp::AtomicAdd => format!("__atomic_fetch_add_{}", size),
@@ -1631,7 +1662,7 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         let dst = self.context.new_cast(self.location, dst, volatile_void_ptr_type);
         // FIXME(antoyo): not sure why, but we have the wrong type here.
         let new_src_type = atomic_function.get_param(1).to_rvalue().get_type();
-        let src = self.context.new_cast(self.location, src, new_src_type);
+        let src = self.context.new_bitcast(self.location, src, new_src_type);
         let res = self.context.new_call(self.location, atomic_function, &[dst, src, order]);
         self.context.new_cast(self.location, res, src.get_type())
     }
