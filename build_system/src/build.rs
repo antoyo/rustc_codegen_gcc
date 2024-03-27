@@ -9,6 +9,7 @@ use std::path::Path;
 struct BuildArg {
     flags: Vec<String>,
     config_info: ConfigInfo,
+    rootsys: bool,
 }
 
 impl BuildArg {
@@ -28,6 +29,12 @@ impl BuildArg {
                             "Expected a value after `--features`, found nothing".to_string()
                         );
                     }
+                }
+                "--sysroot" => {
+                    println!("Build sysroot: {}", build_arg.rootsys);
+                    build_arg.rootsys = true;
+                    println!("Build sysroot: {}", build_arg.rootsys);
+                    return Ok(None);
                 }
                 "--help" => {
                     Self::usage();
@@ -219,9 +226,14 @@ fn build_codegen(args: &mut BuildArg) -> Result<(), String> {
         )
     })?;
 
+    if args.rootsys {
     println!("[BUILD] sysroot");
     build_sysroot(&env, &args.config_info)?;
     Ok(())
+    }
+
+     Ok(())
+   
 }
 
 pub fn run() -> Result<(), String> {
@@ -230,6 +242,7 @@ pub fn run() -> Result<(), String> {
         None => return Ok(()),
     };
     args.config_info.setup_gcc_path()?;
+    args.rootsys = false;
     build_codegen(&mut args)?;
     Ok(())
 }
