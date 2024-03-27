@@ -33,7 +33,9 @@ impl BuildArg {
                     }
                 }
                 "--sysroot" => {
+                    println!("Build sysroot: {}", args.sysroot);
                     build_arg.sysroot = true;
+                    println!("Build sysroot: {}", args.sysroot);
                     return Ok(None);
                 }
                 "--help" => {
