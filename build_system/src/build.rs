@@ -229,8 +229,9 @@ fn build_codegen(args: &mut BuildArg) -> Result<(), String> {
     if args.rootsys {
     println!("[BUILD] sysroot");
     build_sysroot(&env, &args.config_info)?;
-    Ok(());
+   
     }
+     Ok(())
    
 }
 
