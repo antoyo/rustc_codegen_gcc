@@ -233,6 +233,7 @@ pub fn run() -> Result<(), String> {
         None => return Ok(()),
     };
     args.config_info.setup_gcc_path()?;
+    args.sysroot = false;
     build_codegen(&mut args)?;
     Ok(())
 }
