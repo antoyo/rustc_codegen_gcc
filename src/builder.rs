@@ -25,7 +25,7 @@ use rustc_middle::ty::layout::{
     FnAbiError, FnAbiOfHelpers, FnAbiRequest, HasParamEnv, HasTyCtxt, LayoutError, LayoutOfHelpers,
     TyAndLayout,
 };
-use rustc_middle::ty::{ParamEnv, Ty, TyCtxt};
+use rustc_middle::ty::{Instance, ParamEnv, Ty, TyCtxt};
 use rustc_span::def_id::DefId;
 use rustc_span::Span;
 use rustc_target::abi::{
@@ -68,7 +68,17 @@ impl<'a, 'gcc, 'tcx> Builder<'a, 'gcc, 'tcx> {
         src: RValue<'gcc>,
         order: AtomicOrdering,
     ) -> RValue<'gcc> {
+        #[cfg(feature = "master")]
         let size = src.get_type().get_size();
+        #[cfg(not(feature = "master"))]
+        let size = {
+            let type_ = src.get_type();
+            if type_.get_pointee().is_some() {
+                std::mem::size_of::<*const ()>() as u32
+            } else {
+                type_.get_size()
+            }
+        };
 
         let func = self.current_func();
 
@@ -138,7 +148,18 @@ impl<'a, 'gcc, 'tcx> Builder<'a, 'gcc, 'tcx> {
         failure_order: AtomicOrdering,
         weak: bool,
     ) -> RValue<'gcc> {
+        #[cfg(feature = "master")]
         let size = src.get_type().get_size();
+        #[cfg(not(feature = "master"))]
+        let size = {
+            let type_ = src.get_type();
+            if type_.get_pointee().is_some() {
+                std::mem::size_of::<*const ()>() as u32
+            } else {
+                type_.get_size()
+            }
+        };
+
         let compare_exchange =
             self.context.get_builtin_function(&format!("__atomic_compare_exchange_{}", size));
         let order = self.context.new_rvalue_from_int(self.i32_type, order.to_gcc());
@@ -153,7 +174,7 @@ impl<'a, 'gcc, 'tcx> Builder<'a, 'gcc, 'tcx> {
 
         // NOTE: not sure why, but we have the wrong type here.
         let int_type = compare_exchange.get_param(2).to_rvalue().get_type();
-        let src = self.context.new_cast(self.location, src, int_type);
+        let src = self.context.new_bitcast(self.location, src, int_type);
         self.context.new_call(
             self.location,
             compare_exchange,
@@ -190,8 +211,7 @@ impl<'a, 'gcc, 'tcx> Builder<'a, 'gcc, 'tcx> {
         let casted_args: Vec<_> = param_types
             .into_iter()
             .zip(args.iter())
-            .enumerate()
-            .map(|(_i, (expected_ty, &actual_val))| {
+            .map(|(expected_ty, &actual_val)| {
                 let actual_ty = actual_val.get_type();
                 if expected_ty != actual_ty {
                     self.bitcast(actual_val, expected_ty)
@@ -592,12 +612,13 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         then: Block<'gcc>,
         catch: Block<'gcc>,
         _funclet: Option<&Funclet>,
+        instance: Option<Instance<'tcx>>,
     ) -> RValue<'gcc> {
         let try_block = self.current_func().new_block("try");
 
         let current_block = self.block;
         self.block = try_block;
-        let call = self.call(typ, fn_attrs, None, func, args, None); // TODO(antoyo): use funclet here?
+        let call = self.call(typ, fn_attrs, None, func, args, None, instance); // TODO(antoyo): use funclet here?
         self.block = current_block;
 
         let return_value =
@@ -629,8 +650,9 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         then: Block<'gcc>,
         catch: Block<'gcc>,
         _funclet: Option<&Funclet>,
+        instance: Option<Instance<'tcx>>,
     ) -> RValue<'gcc> {
-        let call_site = self.call(typ, fn_attrs, None, func, args, None);
+        let call_site = self.call(typ, fn_attrs, None, func, args, None, instance);
         let condition = self.context.new_rvalue_from_int(self.bool_type, 1);
         self.llbb().end_with_conditional(self.location, condition, then, catch);
         if let Some(_fn_abi) = fn_abi {
@@ -1598,7 +1620,17 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         src: RValue<'gcc>,
         order: AtomicOrdering,
     ) -> RValue<'gcc> {
+        #[cfg(feature = "master")]
         let size = src.get_type().get_size();
+        #[cfg(not(feature = "master"))]
+        let size = {
+            let type_ = src.get_type();
+            if type_.get_pointee().is_some() {
+                std::mem::size_of::<*const ()>() as u32
+            } else {
+                type_.get_size()
+            }
+        };
         let name = match op {
             AtomicRmwBinOp::AtomicXchg => format!("__atomic_exchange_{}", size),
             AtomicRmwBinOp::AtomicAdd => format!("__atomic_fetch_add_{}", size),
@@ -1629,7 +1661,7 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         let dst = self.context.new_cast(self.location, dst, volatile_void_ptr_type);
         // FIXME(antoyo): not sure why, but we have the wrong type here.
         let new_src_type = atomic_function.get_param(1).to_rvalue().get_type();
-        let src = self.context.new_cast(self.location, src, new_src_type);
+        let src = self.context.new_bitcast(self.location, src, new_src_type);
         let res = self.context.new_call(self.location, atomic_function, &[dst, src, order]);
         self.context.new_cast(self.location, res, src.get_type())
     }
@@ -1667,6 +1699,7 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         func: RValue<'gcc>,
         args: &[RValue<'gcc>],
         funclet: Option<&Funclet>,
+        _instance: Option<Instance<'tcx>>,
     ) -> RValue<'gcc> {
         // FIXME(antoyo): remove when having a proper API.
         let gcc_func = unsafe { std::mem::transmute(func) };
