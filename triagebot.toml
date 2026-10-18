@@ -2,3 +2,4 @@
 
 # Prevents un-canonicalized issue links (to avoid wrong issues being linked in r-l/rust)
 [issue-links]
+subrepo change in mainrepo
